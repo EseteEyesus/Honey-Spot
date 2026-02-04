@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // 2. API Key authentication
+    // 2. API Key auth
     const apiKey = req.headers["x-api-key"];
     if (!apiKey || apiKey !== process.env.API_KEY) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     // 3. Parse JSON body safely
     let body = {};
     try {
-      body = await req.json();
+      body = await req.json(); // ✅ this replaces req.body
     } catch (err) {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
@@ -36,24 +36,21 @@ export default async function handler(req, res) {
       message.toLowerCase().includes(k)
     );
 
-    // 5. Extract intelligence (fake for hackathon)
-    const extractedIntelligence = {
-      bank_accounts: isScam ? ["1234567890"] : [],
-      upi_ids: isScam ? ["hackathon@upi"] : [],
-      phishing_links: isScam ? ["http://scam-link.com"] : []
-    };
-
-    // 6. Agent reply
-    const agentReply = isScam
+    // 5. Honeypot reply
+    const reply = isScam
       ? "I am interested. Please share your bank or UPI details to proceed."
       : "Okay, thank you.";
 
-    // 7. Send response
+    // 6. Send response
     return res.status(200).json({
       is_scam: isScam,
       conversation_active: isScam,
-      extracted_intelligence: extractedIntelligence,
-      agent_reply: agentReply
+      extracted_intelligence: {
+        bank_accounts: isScam ? ["1234567890"] : [],
+        upi_ids: isScam ? ["hackathon@upi"] : [],
+        phishing_links: isScam ? ["http://scam-link.com"] : []
+      },
+      agent_reply: reply
     });
 
   } catch (err) {
