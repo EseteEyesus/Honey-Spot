@@ -1,6 +1,6 @@
 const conversations = new Map();
 
-function getConversation(id) {
+export function getConversation(id) {
   if (!conversations.has(id)) {
     conversations.set(id, {
       messages: [],

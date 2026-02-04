@@ -1,10 +1,7 @@
-const OpenAI = require("openai");
+import OpenAI from "openai";
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-async function generateLLMReply(conversation) {
+export async function generateLLMReply(conversation) {
   const messages = conversation.messages.slice(-6).map((msg) => ({
     role: "user",
     content: msg,

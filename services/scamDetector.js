@@ -1,15 +1,15 @@
-const scamKeywords = [
-  "urgent",
-  "account blocked",
-  "verify now",
-  "click link",
-  "otp",
-  "bank",
-  "upi",
-  "refund",
-];
+export function detectScam(message) {
+  const scamKeywords = [
+    "urgent",
+    "account blocked",
+    "verify now",
+    "click link",
+    "otp",
+    "bank",
+    "upi",
+    "refund",
+  ];
 
-function detectScam(message) {
   const lower = message.toLowerCase();
   let score = 0;
 
@@ -22,5 +22,3 @@ function detectScam(message) {
     confidence: Math.min(score / 5, 1),
   };
 }
-
-module.exports = { detectScam };

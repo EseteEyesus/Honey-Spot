@@ -1,4 +1,4 @@
-function extractInfo(message, extracted) {
+export function extractInfo(message, extracted) {
   const bankRegex = /\b\d{9,18}\b/g;
   const upiRegex = /\b[\w.-]+@[\w.-]+\b/g;
   const urlRegex = /(https?:\/\/[^\s]+)/g;

@@ -1,4 +1,4 @@
-function fallbackReply() {
+export function fallbackReply() {
   const replies = [
     "Please explain more, I want to be sure.",
     "Okay, what details do you need from me?",
