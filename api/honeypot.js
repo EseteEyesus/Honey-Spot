@@ -12,12 +12,10 @@ export default async function handler(req, res) {
     }
 
     // 3️⃣ Safely parse JSON body
-    let body = {};
-    try {
-      body = await req.json();
-    } catch {
-      return res.status(400).json({ error: "Invalid JSON body" });
-    }
+  const body = req.body; // ✅ Vercel automatically parses JSON
+  if (!body || !body.message) {
+    return res.status(400).json({ error: "Message is required" });
+  }
 
     const message = body.message;
     if (!message) return res.status(400).json({ error: "Message is required" });
