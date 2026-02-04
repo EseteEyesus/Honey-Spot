@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     // 3. Parse JSON body safely
     let body = {};
     try {
-      body = await req.json(); // ✅ this replaces req.body
-    } catch (err) {
+      body = await req.json(); // ✅ This works in Vercel serverless
+    } catch {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
 
@@ -36,12 +36,11 @@ export default async function handler(req, res) {
       message.toLowerCase().includes(k)
     );
 
-    // 5. Honeypot reply
+    // 5. Fake honeypot reply
     const reply = isScam
       ? "I am interested. Please share your bank or UPI details to proceed."
       : "Okay, thank you.";
 
-    // 6. Send response
     return res.status(200).json({
       is_scam: isScam,
       conversation_active: isScam,
@@ -52,7 +51,6 @@ export default async function handler(req, res) {
       },
       agent_reply: reply
     });
-
   } catch (err) {
     console.error("🔥 Honeypot crashed:", err);
     return res.status(500).json({
