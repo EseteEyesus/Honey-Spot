@@ -6,22 +6,22 @@ import { fallbackReply } from "../services/agent";
 
 export default async function handler(req, res) {
   try {
-    // 1. Method check
+    // 1. Only allow POST
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // 2. API key auth
+    // 2. API Key authentication
     const apiKey = req.headers["x-api-key"];
     if (!apiKey || apiKey !== process.env.API_KEY) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    // 3. Safe body parsing
+    // 3. Parse JSON body safely
     let body = {};
     try {
-      body = await req.json(); // ✅ parse JSON body safely
-    } catch (e) {
+      body = await req.json();
+    } catch (err) {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
 
@@ -30,27 +30,30 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // 4. Simple scam detection
+    // 4. Scam detection
     const scamKeywords = ["win", "urgent", "prize", "click", "verify"];
     const isScam = scamKeywords.some(k =>
       message.toLowerCase().includes(k)
     );
 
-    // 5. Honeypot reply
-    const reply = isScam
+    // 5. Extract intelligence (fake for hackathon)
+    const extractedIntelligence = {
+      bank_accounts: isScam ? ["1234567890"] : [],
+      upi_ids: isScam ? ["hackathon@upi"] : [],
+      phishing_links: isScam ? ["http://scam-link.com"] : []
+    };
+
+    // 6. Agent reply
+    const agentReply = isScam
       ? "I am interested. Please share your bank or UPI details to proceed."
       : "Okay, thank you.";
 
-    // 6. Hackathon-compliant response
+    // 7. Send response
     return res.status(200).json({
       is_scam: isScam,
       conversation_active: isScam,
-      extracted_intelligence: {
-        bank_accounts: [],
-        upi_ids: [],
-        phishing_links: []
-      },
-      agent_reply: reply
+      extracted_intelligence: extractedIntelligence,
+      agent_reply: agentReply
     });
 
   } catch (err) {
