@@ -1,22 +1,22 @@
+// Serverless Honeypot API for Vercel
 export default async function handler(req, res) {
   try {
-    // Only POST allowed
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
-    // API Key check
-    const apiKey = req.headers["x-api-key"];
-    if (!apiKey || apiKey !== process.env.API_KEY) return res.status(401).json({ error: "Unauthorized" });
-
-    // Parse JSON body safely
-    let message = "";
-    try {
-      message = req.body?.message || "";
-    } catch {
-      message = "";
+    // 1️⃣ Only allow POST
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
-    // If message empty → tester ping
-    if (!message.trim()) {
+    // 2️⃣ API Key check
+    const apiKey = req.headers["x-api-key"];
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // 3️⃣ Parse body safely
+    const message = req.body?.message?.trim() || "";
+
+    // 4️⃣ If no message → tester ping
+    if (!message) {
       return res.status(200).json({
         is_scam: false,
         confidence: 0,
@@ -30,23 +30,35 @@ export default async function handler(req, res) {
       });
     }
 
-    // Scam detection keywords
-    const keywords = ["otp", "bank", "verify", "urgent", "click", "upi", "refund", "account", "win", "prize"];
+    // 5️⃣ Scam detection keywords
+    const keywords = [
+      "otp",
+      "bank",
+      "verify",
+      "urgent",
+      "click",
+      "upi",
+      "refund",
+      "account",
+      "win",
+      "prize",
+    ];
+
     const lower = message.toLowerCase();
     const hits = keywords.filter((k) => lower.includes(k)).length;
     const isScam = hits >= 2;
 
-    // Extract bank/UPI info if scam
+    // 6️⃣ Extract intelligence if scam
     const bankAccounts = message.match(/\b\d{9,18}\b/g) || [];
     const upiIds = message.match(/\b[\w.-]+@[\w.-]+\b/g) || [];
     const phishingLinks = message.match(/https?:\/\/[^\s]+/g) || [];
 
-    // Reply
+    // 7️⃣ Agent reply
     const agentReply = isScam
       ? "I am interested. Please share the bank or UPI details to proceed."
-      : "Okay, tell me more.";
+      : ["Okay, tell me more.", "Alright, continue please.", "Thanks, go on."].sort(() => 0.5 - Math.random())[0];
 
-    // Send JSON response
+    // 8️⃣ Send response
     return res.status(200).json({
       is_scam: isScam,
       confidence: Math.min(hits / 5, 1),
