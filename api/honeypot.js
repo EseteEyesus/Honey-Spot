@@ -1,27 +1,22 @@
-// Vercel runtime
-export const config = {
-  runtime: "nodejs",
-};
-
 export default async function handler(req, res) {
   try {
-    // 1️⃣ Allow only POST
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
+    // Only POST allowed
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-    // 2️⃣ API key validation
+    // API Key check
     const apiKey = req.headers["x-api-key"];
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
+    if (!apiKey || apiKey !== process.env.API_KEY) return res.status(401).json({ error: "Unauthorized" });
+
+    // Parse JSON body safely
+    let message = "";
+    try {
+      message = req.body?.message || "";
+    } catch {
+      message = "";
     }
 
-    // 3️⃣ Safely parse JSON body
-    const body = typeof req.body === "object" ? req.body : {};
-    const message = (body.message || "").trim();
-
-    // 4️⃣ Handle empty message (tester ping)
-    if (!message) {
+    // If message empty → tester ping
+    if (!message.trim()) {
       return res.status(200).json({
         is_scam: false,
         confidence: 0,
@@ -35,35 +30,23 @@ export default async function handler(req, res) {
       });
     }
 
-    // 5️⃣ Simple scam detection
-    const keywords = [
-      "otp",
-      "bank",
-      "verify",
-      "urgent",
-      "click",
-      "upi",
-      "refund",
-      "account",
-      "win",
-      "prize",
-    ];
-
+    // Scam detection keywords
+    const keywords = ["otp", "bank", "verify", "urgent", "click", "upi", "refund", "account", "win", "prize"];
     const lower = message.toLowerCase();
     const hits = keywords.filter((k) => lower.includes(k)).length;
     const isScam = hits >= 2;
 
-    // 6️⃣ Extract intelligence (optional, can expand later)
+    // Extract bank/UPI info if scam
     const bankAccounts = message.match(/\b\d{9,18}\b/g) || [];
     const upiIds = message.match(/\b[\w.-]+@[\w.-]+\b/g) || [];
     const phishingLinks = message.match(/https?:\/\/[^\s]+/g) || [];
 
-    // 7️⃣ Agent reply
+    // Reply
     const agentReply = isScam
       ? "I am interested. Please share the bank or UPI details to proceed."
-      : ["Okay, tell me more.", "Alright, continue please.", "Thanks, go on."].sort(() => 0.5 - Math.random())[0];
+      : "Okay, tell me more.";
 
-    // 8️⃣ Send response
+    // Send JSON response
     return res.status(200).json({
       is_scam: isScam,
       confidence: Math.min(hits / 5, 1),
