@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Honeypot API for Hackathon",
   "main": "index.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "start": "node api/honeypot.js",
     "test": "echo \"No tests\""
