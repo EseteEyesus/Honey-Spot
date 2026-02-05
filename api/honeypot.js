@@ -1,7 +1,12 @@
+// 🔴 REQUIRED for Vercel (fixes 500 error)
+export const config = {
+  runtime: "nodejs",
+};
+
 import OpenAI from "openai";
 
 /* =========================
-   OpenAI initialization (SAFE)
+   OpenAI (safe init)
 ========================= */
 let openai = null;
 if (process.env.OPENAI_API_KEY) {
@@ -30,19 +35,19 @@ function getConversation(id) {
 ========================= */
 function fallbackReply() {
   const replies = [
-    "Please explain more, I want to be sure.",
-    "Okay, what details do you need from me?",
-    "Can you send the account or UPI details?",
-    "Please share the link so I can continue.",
+    "Please explain more.",
+    "Okay, what details do you need?",
+    "Can you share the account or UPI details?",
+    "Please send the link to continue.",
   ];
   return replies[Math.floor(Math.random() * replies.length)];
 }
 
 /* =========================
-   Simple scam detection
+   Scam detection
 ========================= */
 function detectScam(message) {
-  const scamKeywords = [
+  const keywords = [
     "urgent",
     "account blocked",
     "verify",
@@ -55,11 +60,11 @@ function detectScam(message) {
     "prize",
   ];
 
-  const lower = message.toLowerCase();
+  const text = message.toLowerCase();
   let score = 0;
 
-  scamKeywords.forEach((word) => {
-    if (lower.includes(word)) score++;
+  keywords.forEach((k) => {
+    if (text.includes(k)) score++;
   });
 
   return {
@@ -84,22 +89,21 @@ function extractInfo(message) {
 }
 
 /* =========================
-   LLM-based reply (optional)
+   LLM reply (optional)
 ========================= */
 async function generateLLMReply(conversation) {
   if (!openai) return fallbackReply();
 
-  const messages = conversation.messages.slice(-6).map((msg) => ({
+  const messages = conversation.messages.slice(-6).map((m) => ({
     role: "user",
-    content: msg,
+    content: m,
   }));
 
   const systemPrompt = `
 You are a normal human chatting casually.
 You are NOT aware this is a scam.
-Politely ask for details like account number, UPI ID, or link.
-Never accuse or warn.
-Be simple and realistic.
+Politely ask for bank, UPI, or link.
+Never warn or accuse.
 `;
 
   const response = await openai.chat.completions.create({
@@ -116,7 +120,7 @@ Be simple and realistic.
 ========================= */
 export default async function handler(req, res) {
   try {
-    /* 1️⃣ Method check */
+    /* 1️⃣ Allow POST only */
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
@@ -127,11 +131,10 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    /* 3️⃣ SAFE body handling (CRITICAL FOR TESTER) */
+    /* 3️⃣ SAFE body handling (tester sends NO body) */
     const body = req.body || {};
     const message = body.message || "";
 
-    // Tester sends NO body → must not crash
     if (!message) {
       return res.status(200).json({
         status: "ok",
@@ -147,11 +150,11 @@ export default async function handler(req, res) {
       });
     }
 
-    /* 4️⃣ Scam detection */
+    /* 4️⃣ Detect scam */
     const scamResult = detectScam(message);
 
-    /* 5️⃣ Intelligence extraction */
-    const extractedIntelligence = scamResult.isScam
+    /* 5️⃣ Extract intelligence */
+    const extracted = scamResult.isScam
       ? extractInfo(message)
       : {
           bank_accounts: [],
@@ -164,13 +167,13 @@ export default async function handler(req, res) {
     conversation.messages.push(message);
 
     /* 7️⃣ Generate reply */
-    let agentReply;
+    let reply;
     try {
-      agentReply = scamResult.isScam
+      reply = scamResult.isScam
         ? await generateLLMReply(conversation)
         : fallbackReply();
     } catch {
-      agentReply =
+      reply =
         "I am interested. Please share your bank or UPI details to proceed.";
     }
 
@@ -179,8 +182,8 @@ export default async function handler(req, res) {
       is_scam: scamResult.isScam,
       confidence: scamResult.confidence,
       conversation_active: scamResult.isScam,
-      extracted_intelligence: extractedIntelligence,
-      agent_reply: agentReply,
+      extracted_intelligence: extracted,
+      agent_reply: reply,
     });
   } catch (err) {
     console.error("🔥 Honeypot crashed:", err);
