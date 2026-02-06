@@ -1,168 +1,126 @@
-import OpenAI from "openai";
-
-// Optional: initialize OpenAI if you want LLM replies
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // set in Vercel
-});
-
-// In-memory conversation store
-const conversations = new Map();
-function getConversation(id) {
-  if (!conversations.has(id)) {
-    conversations.set(id, {
-      messages: [],
-      scamDetected: false,
-      createdAt: Date.now(),
-      extracted: {
-        bankAccounts: [],
-        upiIds: [],
-        urls: [],
-      },
-    });
-  }
-  return conversations.get(id);
-}
-
-// Fallback replies for honeypot
-function fallbackReply() {
-  const replies = [
-    "Please explain more, I want to be sure.",
-    "Okay, what details do you need from me?",
-    "Can you send the account or UPI details?",
-    "Please share the link so I can continue.",
-  ];
-  return replies[Math.floor(Math.random() * replies.length)];
-}
-
-// Simple scam detection
-function detectScam(message) {
-  const scamKeywords = [
-    "urgent",
-    "account blocked",
-    "verify now",
-    "click link",
-    "otp",
-    "bank",
-    "upi",
-    "refund",
-    "win",
-    "prize",
-  ];
-
-  const lower = message.toLowerCase();
-  let score = 0;
-  scamKeywords.forEach((word) => {
-    if (lower.includes(word)) score++;
-  });
-
-  return {
-    isScam: score >= 2,
-    confidence: Math.min(score / 5, 1),
-  };
-}
-
-// Extract intelligence from message
-function extractInfo(message) {
-  const bankRegex = /\b\d{9,18}\b/g;
-  const upiRegex = /\b[\w.-]+@[\w.-]+\b/g;
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-
-  return {
-    bank_accounts: message.match(bankRegex) || [],
-    upi_ids: message.match(upiRegex) || [],
-    phishing_links: message.match(urlRegex) || [],
-  };
-}
-
-// Optional: LLM reply generator
-async function generateLLMReply(conversation) {
-  if (!openai) return fallbackReply();
-
-  const messages = conversation.messages.slice(-6).map((msg) => ({
-    role: "user",
-    content: msg,
-  }));
-
-  const systemPrompt = `
-You are a normal human chatting casually.
-You are NOT aware this is a scam.
-Politely ask for details like account number, UPI ID, or link.
-Never accuse or warn.
-Be simple and realistic.
-`;
-
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "system", content: systemPrompt }, ...messages],
-    temperature: 0.7,
-  });
-
-  return response.choices[0].message.content;
-}
-
-// API handler
 export default async function handler(req, res) {
   try {
-    // 1️⃣ Only allow POST
+    // 1️⃣ Allow only POST
     if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
+      return res.status(405).json({
+        status: "error",
+        message: "Method not allowed"
+      });
     }
 
-    // 2️⃣ API Key authentication
+    // 2️⃣ API KEY CHECK
     const apiKey = req.headers["x-api-key"];
     if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({
+        status: "error",
+        message: "Invalid API key"
+      });
     }
 
-    // 3️⃣ Parse body safely
-    const body = req.body;
-    if (!body || !body.message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-    const message = body.message;
+    // 3️⃣ READ REQUEST BODY
+    const { sessionId, message, conversationHistory = [], metadata } = req.body;
 
-    // 4️⃣ Scam detection
-    const scamResult = detectScam(message);
-    const isScam = scamResult.isScam;
-
-    // 5️⃣ Extract intelligence if scam
-    const extractedIntelligence = isScam
-      ? extractInfo(message)
-      : {
-          bank_accounts: [],
-          upi_ids: [],
-          phishing_links: [],
-        };
-
-    // 6️⃣ Get conversation store
-    const conversation = getConversation("default");
-    conversation.messages.push(message);
-
-    // 7️⃣ Generate reply
-    let agentReply = "";
-    try {
-      agentReply = isScam
-        ? await generateLLMReply(conversation)
-        : fallbackReply();
-    } catch {
-      agentReply = isScam
-        ? "I am interested. Please share your bank or UPI details to proceed."
-        : "Okay, thank you.";
+    if (!sessionId || !message || !message.text) {
+      return res.status(400).json({
+        status: "error",
+        message: "Malformed request"
+      });
     }
 
-    // 8️⃣ Send response
-    return res.status(200).json({
-      is_scam: isScam,
-      confidence: scamResult.confidence,
-      conversation_active: isScam,
-      extracted_intelligence: extractedIntelligence,
-      agent_reply: agentReply,
+    const scamText = message.text.toLowerCase();
+
+    // 4️⃣ SIMPLE SCAM DETECTION
+    const scamKeywords = [
+      "blocked",
+      "verify",
+      "urgent",
+      "upi",
+      "account",
+      "suspend",
+      "bank"
+    ];
+
+    const isScam = scamKeywords.some(word => scamText.includes(word));
+
+    // 5️⃣ EXTRACT INTELLIGENCE
+    const extractedIntelligence = {
+      bankAccounts: [],
+      upiIds: [],
+      phishingLinks: [],
+      phoneNumbers: [],
+      suspiciousKeywords: []
+    };
+
+    // Extract UPI IDs
+    const upiRegex = /\b[\w.-]+@[\w.-]+\b/g;
+    const upiMatches = scamText.match(upiRegex);
+    if (upiMatches) extractedIntelligence.upiIds.push(...upiMatches);
+
+    // Extract links
+    const linkRegex = /(https?:\/\/[^\s]+)/g;
+    const linkMatches = scamText.match(linkRegex);
+    if (linkMatches) extractedIntelligence.phishingLinks.push(...linkMatches);
+
+    // Extract phone numbers
+    const phoneRegex = /\+?\d{10,13}/g;
+    const phoneMatches = scamText.match(phoneRegex);
+    if (phoneMatches) extractedIntelligence.phoneNumbers.push(...phoneMatches);
+
+    // Extract keywords
+    scamKeywords.forEach(word => {
+      if (scamText.includes(word)) {
+        extractedIntelligence.suspiciousKeywords.push(word);
+      }
     });
-  } catch (err) {
-    console.error("🔥 Honeypot crashed:", err);
+
+    // 6️⃣ HUMAN-LIKE REPLY LOGIC
+    let reply = "Okay";
+
+    if (isScam && conversationHistory.length === 0) {
+      reply = "Why will my account be blocked?";
+    } else if (isScam && conversationHistory.length === 1) {
+      reply = "I am confused, can you explain what I need to do?";
+    } else if (isScam && conversationHistory.length >= 2) {
+      reply = "I am worried, please help me fix this.";
+    } else {
+      reply = "Can you explain more?";
+    }
+
+    // 7️⃣ FINAL CALLBACK TO GUVI (after enough messages)
+    if (isScam && conversationHistory.length >= 3) {
+      const payload = {
+        sessionId: sessionId,
+        scamDetected: true,
+        totalMessagesExchanged: conversationHistory.length + 1,
+        extractedIntelligence,
+        agentNotes: "Scammer used urgency and account threat tactics"
+      };
+
+      // Send callback (do not crash if it fails)
+      try {
+        await fetch("https://hackathon.guvi.in/api/updateHoneyPotFinalResult", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        console.error("Callback failed", err);
+      }
+    }
+
+    // 8️⃣ SUCCESS RESPONSE (THIS IS WHAT THEY CHECK)
+    return res.status(200).json({
+      status: "success",
+      reply
+    });
+
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({
-      error: "Internal Server Error",
-      message: err.message,
+      status: "error",
+      message: "Internal server error"
     });
   }
 }
